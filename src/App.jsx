@@ -47,6 +47,13 @@ const themeClasses = {
     panel: 'border-slate-700 bg-slate-900 text-slate-50',
     muted: 'text-slate-400',
   },
+  leather: {
+    shell: 'bg-[#f4efe8] text-[#2c221b]',
+    sidebar: 'bg-gradient-to-b from-[#2b2018] via-[#1f1712] to-[#140f0d] text-[#f3eadf]',
+    header: 'border-[#d8c7b0] bg-[#f8f2e9]/90 text-[#2c221b] shadow-sm',
+    panel: 'border-[#d8c7b0] bg-[#f9f5f1] text-[#2c221b]',
+    muted: 'text-[#7a5c46]',
+  },
 }
 
 function formatMoney(value) {
@@ -182,6 +189,26 @@ function buildQrPayload(product, unit, color = 'default', size = 'default') {
   return `shoe:${productName}|color:${selectedColor}|size:${selectedSize}|barcode:${unit?.barcode || unit?.id || product?.id || 'unknown'}`
 }
 
+function getScanCandidates(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return []
+
+  const candidates = [raw]
+
+  if (raw.startsWith('shoe:')) {
+    const barcodeMatch = raw.match(/(?:^|\|)barcode:([^|]+)/i)
+    if (barcodeMatch?.[1]) candidates.push(barcodeMatch[1].trim())
+
+    const colorMatch = raw.match(/(?:^|\|)color:([^|]+)/i)
+    if (colorMatch?.[1]) candidates.push(colorMatch[1].trim())
+
+    const sizeMatch = raw.match(/(?:^|\|)size:([^|]+)/i)
+    if (sizeMatch?.[1]) candidates.push(sizeMatch[1].trim())
+  }
+
+  return [...new Set(candidates.filter(Boolean))]
+}
+
 function buildReceiptHtml(receipt) {
   const rows = receipt.items
     .map(
@@ -301,7 +328,8 @@ function AdminLayout({ children, title, subtitle, theme = 'classic' }) {
     pleasant: 'from-emerald-900 via-emerald-800 to-teal-900',
     royal: 'from-violet-900 via-indigo-900 to-violet-950',
     dark: 'from-slate-900 via-slate-800 to-slate-950',
-  }[theme] || 'from-violet-900 via-indigo-900 to-violet-950'
+    leather: 'from-[#2b2018] via-[#3a2c22] to-[#1b1411]',
+  }[theme] || 'from-[#2b2018] via-[#3a2c22] to-[#1b1411]'
 
   if (isMobile) {
     return (
@@ -804,13 +832,19 @@ function BillingPage({ data, onCompleteSale, onReturnProduct, settings }) {
   const itemCount = cart.reduce((sum, item) => sum + Number(item.qty || 0), 0)
 
   const findProduct = (value) => {
-    const stringValue = String(value || '').trim()
-    if (!stringValue) return null
+    const candidates = getScanCandidates(value)
+    if (!candidates.length) return null
 
     return (
       data.products.find((product) => {
-        const unit = (product.units || []).find((item) => item.barcode === stringValue || item.qrCode === stringValue || item.id === stringValue)
-        return unit || product.barcode === stringValue || product.sku === stringValue || product.id === stringValue
+        const unit = (product.units || []).find((item) =>
+          candidates.some((candidate) => item.barcode === candidate || item.qrCode === candidate || item.id === candidate),
+        )
+
+        return (
+          unit ||
+          candidates.some((candidate) => product.barcode === candidate || product.sku === candidate || product.id === candidate)
+        )
       }) || null
     )
   }
@@ -939,8 +973,11 @@ function BillingPage({ data, onCompleteSale, onReturnProduct, settings }) {
       return
     }
 
+    const candidates = getScanCandidates(value)
     const product = data.products.find((item) => {
-      const unit = (item.units || []).find((entry) => entry.barcode === value || entry.qrCode === value || entry.id === value)
+      const unit = (item.units || []).find((entry) =>
+        candidates.some((candidate) => entry.barcode === candidate || entry.qrCode === candidate || entry.id === candidate),
+      )
       return Boolean(unit)
     })
 
@@ -949,7 +986,9 @@ function BillingPage({ data, onCompleteSale, onReturnProduct, settings }) {
       return
     }
 
-    const unit = (product.units || []).find((entry) => entry.barcode === value || entry.qrCode === value || entry.id === value)
+    const unit = (product.units || []).find((entry) =>
+      candidates.some((candidate) => entry.barcode === candidate || entry.qrCode === candidate || entry.id === candidate),
+    )
     if (!unit) {
       setScanError('Returned item was not found in the stock records.')
       return
@@ -1351,7 +1390,8 @@ function SettingsPage({ data, onSaveSettings, onExportBackup, onImportBackup, on
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <SectionHeader eyebrow="Appearance" title="Theme and alerts" description="Customize the dashboard look and low-stock threshold." />
           <div className="space-y-3">
-            <select value={settings.theme || 'pleasant'} onChange={(event) => setSettings((current) => ({ ...current, theme: event.target.value }))} className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5">
+            <select value={settings.theme || 'leather'} onChange={(event) => setSettings((current) => ({ ...current, theme: event.target.value }))} className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5">
+              <option value="leather">Leather Matte</option>
               <option value="pleasant">Pleasant</option>
               <option value="royal">Royal</option>
               <option value="classic">Classic</option>

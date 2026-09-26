@@ -10,8 +10,8 @@ const defaultSettings = {
   currency: 'INR',
   lowStockThreshold: 5,
   invoicePrefix: 'INV',
-  theme: 'pleasant',
-  accentColor: '#10b981',
+  theme: 'leather',
+  accentColor: '#8b5e3c',
   developerName: 'Store Admin',
 }
 
