@@ -176,11 +176,36 @@ export function syncPublicProducts(data) {
   }
 }
 
+export function getLocalStorageData() {
+  try {
+    const rawValue = localStorage.getItem(STORAGE_KEY)
+    if (!rawValue) return null
+
+    const parsed = JSON.parse(rawValue)
+    return syncPublicProducts(parsed)
+  } catch (error) {
+    console.warn('Failed to restore local app data.', error)
+    return null
+  }
+}
+
+export function saveLocalStorageData(data) {
+  try {
+    const synced = syncPublicProducts(data)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(synced))
+    return synced
+  } catch (error) {
+    console.warn('Failed to save local app data.', error)
+    return data
+  }
+}
+
 export async function getRemoteData() {
   const defaults = syncPublicProducts(createDefaultStorageData())
+  const localFallback = getLocalStorageData()
 
   if (!firebaseIsConfigured || !database) {
-    return defaults
+    return localFallback || defaults
   }
 
   try {
@@ -188,7 +213,7 @@ export async function getRemoteData() {
     const snapshot = await get(appDataRef)
 
     if (!snapshot.exists()) {
-      return defaults
+      return localFallback || defaults
     }
 
     const value = snapshot.val() || {}
@@ -201,24 +226,30 @@ export async function getRemoteData() {
       },
     }
 
-    return syncPublicProducts(merged)
+    const synced = syncPublicProducts(merged)
+    saveLocalStorageData(synced)
+    return synced
   } catch (error) {
-    console.warn('Realtime Database fetch failed, using default app state.', error)
-    return defaults
+    console.warn('Realtime Database fetch failed, using local fallback.', error)
+    return localFallback || defaults
   }
 }
 
 export async function saveRemoteData(data) {
+  const synced = syncPublicProducts(data)
+  saveLocalStorageData(synced)
+
   if (!firebaseIsConfigured || !database) {
-    return
+    return synced
   }
 
   try {
-    const synced = syncPublicProducts(data)
     const appDataRef = ref(database, 'appData')
     await set(appDataRef, synced)
+    return synced
   } catch (error) {
-    console.warn('Realtime Database save failed.', error)
+    console.warn('Realtime Database save failed. Local fallback has been preserved.', error)
+    return synced
   }
 }
 
